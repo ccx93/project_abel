@@ -9,14 +9,14 @@ import java.util.*;
 
 public class BruteForceRouter {
     private final List<TransportableObject> mObjectList;
-    private TransportVehicle mTransportVehicle;
+    private List<TransportVehicle> mTransportVehicles;
 
-    public TransportVehicle getTransportVehicle() {
-        return mTransportVehicle;
+    public List<TransportVehicle> getTransportVehicles() {
+        return mTransportVehicles;
     }
 
-    public void setTransportVehicle(TransportVehicle aTransportVehicle) {
-        mTransportVehicle = aTransportVehicle;
+    public void setTransportVehicles(List<TransportVehicle> aTransportVehicles) {
+        mTransportVehicles = aTransportVehicles;
     }
 
     public void clearObjectList() {
@@ -30,7 +30,7 @@ public class BruteForceRouter {
 
     public List<Route> generateRoute() {
         List<Route> tempRouteList = new ArrayList<>(mObjectList.size());
-        if (mObjectList.isEmpty() || mTransportVehicle == null) {
+        if (mObjectList.isEmpty() || mTransportVehicles == null) {
             return tempRouteList;
         }
 
@@ -42,77 +42,71 @@ public class BruteForceRouter {
         }
 
         // loop until all object element is satisfied
-        tempRouteList = generateRouteFromList(allAvailableNodes, mTransportVehicle, null, 0, null, true);
+        for (TransportVehicle vehicle : mTransportVehicles) {
+            vehicle.reset();
+        }
+        tempRouteList = generateRouteFromList(allAvailableNodes, mTransportVehicles, true);
 
         return tempRouteList;
     }
 
     @NotNull
-    private List<Route> generateRouteFromList(List<RouteNode> aRouteNodes, TransportVehicle aTransportVehicle,
-                                              Map<TransportableObjectType, List<TransportableObject>> aCurrentLuggage,
-                                              double aCurrentTime, Point aPrevPoint, boolean isFirst) {
+    private List<Route> generateRouteFromList(List<RouteNode> aRouteNodes, List<TransportVehicle> aTransportVehicles,
+                                              boolean isFirst) {
         if (aRouteNodes.size() <= 0) {
             // WTF happened here
             return new LinkedList<>();
         } else {
             List<Route> finalGeneratedRoutes = null;
             for (int i = 0; i < aRouteNodes.size(); i++) {
-                Point prevPoint;
-                double currentTime;
-                Map<TransportableObjectType, List<TransportableObject>> allLuggage;
-                allLuggage = new HashMap<>(TransportableObjectType.values().length);
-                for (TransportableObjectType category : TransportableObjectType.values()) {
-                    allLuggage.put(category, new LinkedList<>());
-                }
-
-                // Initialize variable for this iteration
-                if (isFirst) {
-                    currentTime = 0;
-                    prevPoint = new Point(0, 0);
-                } else {
-                    for (TransportableObjectType type : TransportableObjectType.values()) {
-                        allLuggage.get(type).addAll(aCurrentLuggage.get(type));
-                    }
-                    currentTime = aCurrentTime;
-                    prevPoint = aPrevPoint;
+                List<TransportVehicle> currentIterationVehicles = new ArrayList<>(aTransportVehicles.size());
+                for (TransportVehicle vehicle : aTransportVehicles) {
+                    currentIterationVehicles.add(vehicle.getClone());
                 }
 
                 RouteNode node = aRouteNodes.get(i);
-                List<TransportableObject> currentLuggage = allLuggage.get(node.getObject().getType());
-                boolean isValid = isNodeValid(node, currentLuggage, aTransportVehicle, currentTime, prevPoint);
 
-                if (!isValid) {
-                    if (!isFirst) {
-                        return finalGeneratedRoutes;
+                for (TransportVehicle availableVehicle : currentIterationVehicles) {
+                    // Initialize variable for this iteration
+                    if (isFirst) {
+                        availableVehicle.setTime(0);
+                        availableVehicle.setLastPoint(new Point(0, 0));
                     }
-                } else {
-                    // Update time and previous node
-                    if (node.isPickup()) {
-                        currentLuggage.add(node.getObject());
-                    } else {
-                        currentLuggage.remove(node.getObject());
-                    }
-                    currentTime += prevPoint.getDistanceTo(node.getPoint()) / aTransportVehicle.getSpeed();
-                    prevPoint = node.getPoint();
 
-                    // Clone list of points, but remove current node
-                    if (finalGeneratedRoutes == null) {
-                        finalGeneratedRoutes = new LinkedList<>();
-                    }
-                    if (aRouteNodes.size() == 1) {
-                        // Stop iteration
-                        finalGeneratedRoutes.add(new Route(node));
-                        return finalGeneratedRoutes;
-                    } else {
-                        List<RouteNode> tempPoints = new LinkedList<>(aRouteNodes);
-                        tempPoints.remove(i);
-                        List<Route> generatedRoutes = generateRouteFromList(tempPoints, aTransportVehicle, allLuggage,
-                                currentTime, prevPoint, false);
-                        if (generatedRoutes != null) {
-                            for (Route route : generatedRoutes) {
-                                route.addNodeOnFirst(node);
+                    List<TransportableObject> currentLuggage = availableVehicle.getCurrentLuggage(node.getObject().getType());
+                    boolean isValid = isNodeValid(node, currentLuggage, availableVehicle,
+                            availableVehicle.getTime(), availableVehicle.getLastPoint());
+
+                    if (isValid) {
+                        // Update time and previous node
+                        if (node.isPickup()) {
+                            currentLuggage.add(node.getObject());
+                        } else {
+                            currentLuggage.remove(node.getObject());
+                        }
+                        availableVehicle.setTime(availableVehicle.getTime()
+                                + availableVehicle.getLastPoint().getDistanceTo(node.getPoint())
+                                / availableVehicle.getSpeed());
+                        availableVehicle.setLastPoint(node.getPoint());
+
+                        // Clone list of points, but remove current node
+                        if (finalGeneratedRoutes == null) {
+                            finalGeneratedRoutes = new LinkedList<>();
+                        }
+                        if (aRouteNodes.size() == 1) {
+                            // Stop iteration
+                            finalGeneratedRoutes.add(new Route(node));
+                            return finalGeneratedRoutes;
+                        } else {
+                            List<RouteNode> tempPoints = new LinkedList<>(aRouteNodes);
+                            tempPoints.remove(i);
+                            List<Route> generatedRoutes = generateRouteFromList(tempPoints, currentIterationVehicles, false);
+                            if (generatedRoutes != null) {
+                                for (Route route : generatedRoutes) {
+                                    route.addNodeOnFirst(node);
+                                }
+                                finalGeneratedRoutes.addAll(generatedRoutes);
                             }
-                            finalGeneratedRoutes.addAll(generatedRoutes);
                         }
                     }
                 }
