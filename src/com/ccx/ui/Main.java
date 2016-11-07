@@ -1,8 +1,8 @@
 package com.ccx.ui;
 
+import com.ccx.core.Routing.BruteForceRouter;
 import com.ccx.core.Routing.Point;
 import com.ccx.core.Routing.Route;
-import com.ccx.core.Routing.BruteForceRouter;
 import com.ccx.core.TransportObject.TransportableObject;
 import com.ccx.core.TransportObject.TransportableObjectType;
 import com.ccx.core.Transportation.TransportVehicle;
@@ -10,6 +10,7 @@ import com.ccx.core.Transportation.TransportVehicle;
 import java.util.*;
 
 public class Main {
+    private static final String SEPARATOR = ";";
 
     public static void main(String[] args) {
         List<TransportableObject> dummyPoints = new LinkedList<>();
@@ -41,11 +42,12 @@ public class Main {
 
         Date endTime = new Date();
         int totalSize = 0;
-        final int MAX_SIZE = 20;
+        final int MAX_SIZE = 200;
+        int routePrinted = 0;
         for (Long id : result.keySet()) {
             totalSize += result.get(id).size();
-            if (totalSize <= MAX_SIZE) {
-                for (Route route : result.get(id)) {
+            for (Route route : result.get(id)) {
+                if (routePrinted++ <= MAX_SIZE) {
                     System.out.println(route.toString());
                 }
             }
