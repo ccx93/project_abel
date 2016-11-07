@@ -7,10 +7,7 @@ import com.ccx.core.TransportObject.TransportableObject;
 import com.ccx.core.TransportObject.TransportableObjectType;
 import com.ccx.core.Transportation.TransportVehicle;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
 public class Main {
 
@@ -21,8 +18,8 @@ public class Main {
 //                new TransportableObject.TimingWindow(0, 1d), new TransportableObject.TimingWindow(9, 15d)));
         dummyPoints.add(new TransportableObject("B", new Point(100, 0), new Point(200, 0), TransportableObjectType.PEOPLE));
         dummyPoints.add(new TransportableObject("C", new Point(50, 0) , new Point(150, 1), TransportableObjectType.OBJECT));
-//        dummyPoints.add(new TransportableObject("D", new Point(150, 1), new Point(250, 1), TransportableObjectType.OBJECT));
-//        dummyPoints.add(new TransportableObject("E", new Point(100, 0), new Point(200, 0), TransportableObjectType.PEOPLE));
+        dummyPoints.add(new TransportableObject("D", new Point(150, 1), new Point(250, 1), TransportableObjectType.OBJECT));
+        dummyPoints.add(new TransportableObject("E", new Point(100, 0), new Point(200, 0), TransportableObjectType.PEOPLE));
 //        dummyPoints.add(new TransportableObject("F", new Point(50, 0) , new Point(150, 1), TransportableObjectType.OBJECT));
 //        dummyPoints.add(new TransportableObject("G", new Point(150, 1), new Point(250, 1), TransportableObjectType.OBJECT));
 //        dummyPoints.add(new TransportableObject("H", new Point(100, 0), new Point(200, 0), TransportableObjectType.PEOPLE));
@@ -37,16 +34,24 @@ public class Main {
         BruteForceRouter router = BruteForceRouter.getInstance();
         router.setObjectList(dummyPoints);
         List<TransportVehicle> vehicleStock = new ArrayList<>();
-        vehicleStock.add(new TransportVehicle(TransportVehicle.VehiclesEnum.TAXI));
+        vehicleStock.add(new TransportVehicle(0, TransportVehicle.VehiclesEnum.TAXI));
+        vehicleStock.add(new TransportVehicle(1, TransportVehicle.VehiclesEnum.TAXI));
         router.setTransportVehicles(vehicleStock);
-        List<Route> result = router.generateRoute();
+        Map<Long, List<Route>> result = router.generateRoute();
 
         Date endTime = new Date();
-        for (Route route : result) {
-            System.out.println(route.toString());
+        int totalSize = 0;
+        final int MAX_SIZE = 20;
+        for (Long id : result.keySet()) {
+            totalSize += result.get(id).size();
+            if (totalSize <= MAX_SIZE) {
+                for (Route route : result.get(id)) {
+                    System.out.println(route.toString());
+                }
+            }
         }
 
-        System.out.println(result.size() + " iteration founds");
+        System.out.println(totalSize + " iteration founds");
         System.out.println("Elapsed time : " + (endTime.getTime() - startTime.getTime()) + " ms");
     }
 }

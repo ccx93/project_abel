@@ -28,8 +28,8 @@ public class BruteForceRouter {
         mObjectList.addAll(aObjectList);
     }
 
-    public List<Route> generateRoute() {
-        List<Route> tempRouteList = new ArrayList<>(mObjectList.size());
+    public Map<Long, List<Route>> generateRoute() {
+        Map<Long, List<Route>> tempRouteList = new HashMap<>(mTransportVehicles.size());
         if (mObjectList.isEmpty() || mTransportVehicles == null) {
             return tempRouteList;
         }
@@ -51,31 +51,35 @@ public class BruteForceRouter {
     }
 
     @NotNull
-    private List<Route> generateRouteFromList(List<RouteNode> aRouteNodes, List<TransportVehicle> aTransportVehicles,
+    private Map<Long, List<Route>> generateRouteFromList(List<RouteNode> aRouteNodes, List<TransportVehicle> aTransportVehicles,
                                               boolean isFirst) {
         if (aRouteNodes.size() <= 0) {
             // WTF happened here
-            return new LinkedList<>();
+            return null;
         } else {
-            List<Route> finalGeneratedRoutes = null;
-            for (int i = 0; i < aRouteNodes.size(); i++) {
-                List<TransportVehicle> currentIterationVehicles = new ArrayList<>(aTransportVehicles.size());
-                for (TransportVehicle vehicle : aTransportVehicles) {
-                    currentIterationVehicles.add(vehicle.getClone());
+            Map<Long, List<Route>> finalGeneratedRoutes = new HashMap<>(aTransportVehicles.size());
+            for (TransportVehicle vehicle : aTransportVehicles) {
+                finalGeneratedRoutes.put(vehicle.getId(), new LinkedList<>());
+            }
+            if (isFirst) {
+                // Initialize vehicle property for first iteration (array is empty)
+                for (TransportVehicle thisVehicle : aTransportVehicles) {
+                    thisVehicle.setTime(0);
+                    thisVehicle.setLastPoint(new Point(0, 0));
                 }
+            }
+            for (int i = 0; i < aRouteNodes.size(); i++) {
+                for (int vehicleIndex = 0; vehicleIndex < aTransportVehicles.size(); vehicleIndex++) {
+                    // First, clone the nodes
+                    RouteNode node = aRouteNodes.get(i).getClone();
+                    // Copy Vehicle array
+                    List<TransportVehicle> currentIterationVehicles = copyVehicleArray(aTransportVehicles);
+                    TransportVehicle thisVehicle = currentIterationVehicles.get(vehicleIndex);
+                    List<TransportableObject> currentLuggage = thisVehicle.getCurrentLuggage(node.getObject().getType());
 
-                RouteNode node = aRouteNodes.get(i);
-
-                for (TransportVehicle availableVehicle : currentIterationVehicles) {
-                    // Initialize variable for this iteration
-                    if (isFirst) {
-                        availableVehicle.setTime(0);
-                        availableVehicle.setLastPoint(new Point(0, 0));
-                    }
-
-                    List<TransportableObject> currentLuggage = availableVehicle.getCurrentLuggage(node.getObject().getType());
-                    boolean isValid = isNodeValid(node, currentLuggage, availableVehicle,
-                            availableVehicle.getTime(), availableVehicle.getLastPoint());
+                    // Make sure current node is valid, based on several properties
+                    boolean isValid = isNodeValid(node, currentLuggage, thisVehicle.getTime(),
+                            thisVehicle.getLastPoint(), currentIterationVehicles, vehicleIndex);
 
                     if (isValid) {
                         // Update time and previous node
@@ -84,28 +88,28 @@ public class BruteForceRouter {
                         } else {
                             currentLuggage.remove(node.getObject());
                         }
-                        availableVehicle.setTime(availableVehicle.getTime()
-                                + availableVehicle.getLastPoint().getDistanceTo(node.getPoint())
-                                / availableVehicle.getSpeed());
-                        availableVehicle.setLastPoint(node.getPoint());
+                        node.setAssignedVehicle(thisVehicle);
+                        thisVehicle.setTime(thisVehicle.getTime()
+                                + thisVehicle.getLastPoint().getDistanceTo(node.getPoint())
+                                / thisVehicle.getSpeed());
+                        thisVehicle.setLastPoint(node.getPoint());
 
-                        // Clone list of points, but remove current node
-                        if (finalGeneratedRoutes == null) {
-                            finalGeneratedRoutes = new LinkedList<>();
-                        }
                         if (aRouteNodes.size() == 1) {
                             // Stop iteration
-                            finalGeneratedRoutes.add(new Route(node));
+                            finalGeneratedRoutes.get(thisVehicle.getId()).add(new Route(node));
                             return finalGeneratedRoutes;
                         } else {
-                            List<RouteNode> tempPoints = new LinkedList<>(aRouteNodes);
-                            tempPoints.remove(i);
-                            List<Route> generatedRoutes = generateRouteFromList(tempPoints, currentIterationVehicles, false);
+                            // Clone list of points, but remove current node
+                            List<RouteNode> clonedPoints = new LinkedList<>(aRouteNodes);
+                            clonedPoints.remove(i);
+                            Map<Long, List<Route>> generatedRoutes = generateRouteFromList(clonedPoints, currentIterationVehicles, false);
                             if (generatedRoutes != null) {
-                                for (Route route : generatedRoutes) {
-                                    route.addNodeOnFirst(node);
+                                for (Long id : generatedRoutes.keySet()) {
+                                    for (Route route : generatedRoutes.get(id)) {
+                                        route.addNodeOnFirst(node);
+                                    }
+                                    finalGeneratedRoutes.get(id).addAll(generatedRoutes.get(id));
                                 }
-                                finalGeneratedRoutes.addAll(generatedRoutes);
                             }
                         }
                     }
@@ -115,18 +119,38 @@ public class BruteForceRouter {
         }
     }
 
-    private static boolean isNodeValid(RouteNode node, List<TransportableObject> aCurrentLuggage,
-                                       TransportVehicle aTransportVehicle, double aCurrentTime, Point aPrevPoint) {
+    private static boolean isNodeValid(RouteNode node, List<TransportableObject> aCurrentLuggage, double aCurrentTime,
+                                       Point aPrevPoint, List<TransportVehicle> aAvailableVehicles, int aAssignedVehicleIndex) {
         // Filter out invalid paths
         TransportableObjectType currentType = node.getObject().getType();
-        if (!aCurrentLuggage.contains(node.getObject())) {
+        boolean isCarriedByOtherVehicle = false;
+        boolean isCarriedByCurrentVehicle = false;
+        for (int i = 0; i < aAvailableVehicles.size(); i++) {
+            TransportVehicle vehicle = aAvailableVehicles.get(i);
+            if (vehicle.getCurrentLuggage(currentType).contains(node.getObject())) {
+                if (i == aAssignedVehicleIndex) {
+                    isCarriedByCurrentVehicle = true;
+                } else {
+                    isCarriedByOtherVehicle = true;
+                }
+                break;
+            }
+        }
+
+        // This is other vehicle's object
+        if (isCarriedByOtherVehicle) {
+            return false;
+        }
+
+        TransportVehicle transportVehicle = aAvailableVehicles.get(aAssignedVehicleIndex);
+        if (!isCarriedByCurrentVehicle) {
             // This is a different object
-            if (aCurrentLuggage.size() < aTransportVehicle.getObjectCapacity(currentType)) {
+            if (aCurrentLuggage.size() < transportVehicle.getObjectCapacity(currentType)) {
                 // carry this new object, if this is the pickup point
                 if (node.isPickup()) {
                     // Check timing window first
                     // update current time
-                    double arrivalTime = aCurrentTime + aPrevPoint.getDistanceTo(node.getPoint()) / aTransportVehicle.getSpeed();
+                    double arrivalTime = aCurrentTime + aPrevPoint.getDistanceTo(node.getPoint()) / transportVehicle.getSpeed();
                     return node.getObject().isWithinTimingWindow(arrivalTime, true);
                 } else {
                     // not pickup, invalid point
@@ -142,13 +166,23 @@ public class BruteForceRouter {
                 // This is a dropoff, find the object and remove it
                 // Check timing window first
                 // update current time
-                double arrivalTime = aCurrentTime + aPrevPoint.getDistanceTo(node.getPoint()) / aTransportVehicle.getSpeed();
+                double arrivalTime = aCurrentTime + aPrevPoint.getDistanceTo(node.getPoint()) / transportVehicle.getSpeed();
                 return node.getObject().isWithinTimingWindow(arrivalTime, false);
             } else {
                 // we encountered this node again? invalid node
                 return false;
             }
         }
+    }
+
+    private static List<TransportVehicle> copyVehicleArray (List<TransportVehicle> aTransportVehicles) {
+        // Copy Vehicle array
+        List<TransportVehicle> clonedList = new ArrayList<>(aTransportVehicles.size());
+        for (TransportVehicle vehicle : aTransportVehicles) {
+            clonedList.add(vehicle.getClone());
+        }
+
+        return clonedList;
     }
 
     private static final BruteForceRouter ourInstance = new BruteForceRouter();

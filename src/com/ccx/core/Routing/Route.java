@@ -34,7 +34,7 @@ public class Route {
         String out = "";
         int i = 1;
         for (RouteNode node : mNodes) {
-            out = out + String.format("%2d - %s", i++ , node.toString()) + "\n";
+            out = out + String.format("%2d : %s", i++ , node.toString()) + "\n";
         }
         return out;
     }

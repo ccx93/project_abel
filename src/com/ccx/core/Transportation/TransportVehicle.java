@@ -10,12 +10,18 @@ import java.util.List;
 import java.util.Map;
 
 public class TransportVehicle {
+    private long mId;
     private VehiclesEnum mAssignedVehicle;
     private Map<TransportableObjectType, List<TransportableObject>> mLuggage;
     private double mTime;
     private Point mLastPoint;
 
-    public TransportVehicle(VehiclesEnum aAssignedVehicle) {
+    public VehiclesEnum getAssignedVehicle() {
+        return mAssignedVehicle;
+    }
+
+    public TransportVehicle(long id, VehiclesEnum aAssignedVehicle) {
+        mId = id;
         mAssignedVehicle = aAssignedVehicle;
         mLuggage = new HashMap<>(TransportableObjectType.values().length);
         for (TransportableObjectType category : TransportableObjectType.values()) {
@@ -25,8 +31,12 @@ public class TransportVehicle {
         mTime = 0;
     }
 
+    public long getId() {
+        return mId;
+    }
+
     public TransportVehicle getClone() {
-        TransportVehicle newVehicle = new TransportVehicle(mAssignedVehicle);
+        TransportVehicle newVehicle = new TransportVehicle(mId, mAssignedVehicle);
         for (TransportableObjectType type : this.getCurrentLuggage().keySet()) {
             newVehicle.getCurrentLuggage().get(type).addAll(this.getCurrentLuggage(type));
         }
@@ -35,7 +45,8 @@ public class TransportVehicle {
 
     public void reset() {
         for (List<TransportableObject> to : mLuggage.values()) {
-            to.clear();;
+            to.clear();
+            ;
         }
         mTime = 0;
         mLastPoint.setX(0);
@@ -85,6 +96,32 @@ public class TransportVehicle {
                 return 10;
         }
         return 0;
+    }
+
+    @Override
+    public boolean equals(Object aO) {
+        if (this == aO) return true;
+        if (aO == null || getClass() != aO.getClass()) return false;
+
+        TransportVehicle vehicle = (TransportVehicle) aO;
+
+        if (Double.compare(vehicle.mTime, mTime) != 0) return false;
+        if (mAssignedVehicle != vehicle.mAssignedVehicle) return false;
+        if (!mLuggage.equals(vehicle.mLuggage)) return false;
+        return mLastPoint.equals(vehicle.mLastPoint);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result;
+        long temp;
+        result = mAssignedVehicle.hashCode();
+        result = 31 * result + mLuggage.hashCode();
+        temp = Double.doubleToLongBits(mTime);
+        result = 31 * result + (int) (temp ^ (temp >>> 32));
+        result = 31 * result + mLastPoint.hashCode();
+        return result;
     }
 
     public enum VehiclesEnum {
